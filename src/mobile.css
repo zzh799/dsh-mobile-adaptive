@@ -710,6 +710,35 @@
   }
 }
 
+/* 空会话（hero/blank）专用独立顶部工具条行：框架 <header> 此时 display:none
+  且不渲染 titleRow，"权限/模型上移"找不到锚点 —— 插件插入本条行作为会话语义
+  列顶部的替代锚点，承载 .dshm-topbar（含 + 弹出面板）。仅 ≤1023px 可见；
+  桌面端随 .dshm-topbar 一并隐藏。 */
+@media (min-width: 1024px) {
+  .dshm-topbar-standalone {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  .dshm-topbar-standalone {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0;
+    box-sizing: border-box;
+    /* 顶部一行，右侧容纳工具条；左侧 padding 给固定定位的汉堡按钮让位。 */
+    padding: 8px 12px 0 64px;
+  }
+}
+
+@media (max-width: 767px) {
+  .dshm-topbar-standalone {
+    padding: 8px 12px 0 60px;
+  }
+}
+
 @media (max-width: 767px) {
   /* 搬进工具条的按钮已脱离 [data-composer-card]，44px 触控规则在此补上。 */
   .dshm-topbar button {

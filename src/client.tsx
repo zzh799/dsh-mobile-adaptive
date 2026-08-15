@@ -279,6 +279,12 @@ function setupSettingsDrilldown(): () => void {
  *  - model/plan 座位锚点、头部 actions/utilities 锚点：SlotOutlet 的无
  *    条件包装器（display:contents），同理从不被单独删除；条目本身删除
  *    发生在锚点内部，仍为其子级，安全。
+ * 锚点两级：有框架 titleRow（会话已有消息）→ 工具条进标题行右端；空会话
+ * （hero/blank）时框架完全不渲染 titleRow（<header> 也 display:none），此
+ * 时工具条进插件自有的 dshm-topbar-standalone 行，插在会话语义列顶部 ——
+ * 这样"会话还没有消息"也能把权限/模型选择上移到顶部。发第一条消息后框架
+ * titleRow 出现，工具条平滑迁移回 titleRow（跨锚点由单一 sync 驱动，move()
+ * 校验父子关系，不重复搬移）。
  * 桌面端（≥1024px）不搬；跨断点回到桌面时全部还原。MutationObserver 兜
  * 底组件重挂（新节点出现在原位）后的再次搬移。
  */
@@ -308,6 +314,13 @@ function setupTopbar(): () => void {
   pop.dataset.dshmTopbarPop = ''
   pop.hidden = true
   topbar.append(more, pop)
+
+  // 空会话（hero/blank）专用独立工具条行：框架的 header/titleRow 不渲染
+  // 时，作为会话语义列顶部一条固定行承载 topbar。仅被 attach() 在
+  // titleRow 缺失时挂载；有消息后框架 titleRow 出现，工具条迁移回 titleRow。
+  const standalone = document.createElement('div')
+  standalone.className = 'dshm-topbar-standalone'
+  standalone.dataset.dshmTopbarStandalone = ''
 
   const toggle = (force?: boolean): void => {
     const open = force ?? pop.hidden
@@ -344,50 +357,95 @@ function setupTopbar(): () => void {
   const MODES_SEL = `${TOOLS_SEL} > div:not([data-slot])`
   const WRAP_KEYS = ['conversation.session.header.actions', 'conversation.session.header.utilities']
 
-  /** .modes：在输入行里找；已被搬进工具条时从工具条子级找（排除 + 按钮与弹出面板）。 */
-  const findModes = (): Element | null => (
-    document.querySelector(MODES_SEL)
-    ?? [...topbar.children].find(child =>
-      child instanceof HTMLElement
-      && child.tagName === 'DIV'
-      && !child.hasAttribute('data-slot')
-      && !child.hasAttribute('data-dshm-topbar-pop'))
-    ?? null
-  )
+  /**
+   * 把"当前节点"搬进容器，同时清掉容器里同类的陈旧节点。
+   * 会话切换时 React 只在输入行按 key={sessionId} 重建新的 .modes/模型座位，
+   * 已被搬到工具条里的旧节点会滞留成为孤儿 —— 若不清理，每切换一次就多一个。
+   * 当输入行没有候选节点（node 为 null）时，说明工具条里同类的现存节点就是
+   * 当前会话的，必须保留 —— 只有存在新的候选才去重并搬入。
+   * @param node 当前会话的搬移候选（输入行里的节点），可为 null。
+   * @param isSame 判定容器内某个子节点与当前节点同型（陈旧可清）与否。
+   */
+  const moveSingle = (node: Element | null, to: Element, before: Node | null, isSame: (child: Element) => boolean): void => {
+    if (node === null) return
+    for (const child of [...to.children]) {
+      if (child === node) continue
+      if (isSame(child)) child.remove()
+    }
+    move(node, to, before)
+  }
+
+  /** 空会话工具条行挂载到会话语义列顶部：header 座位（display:contents）之后、scrollBody 之前。 */
+  const ensureStandalone = (header: Element): void => {
+    const seat = header.closest('[data-slot="conversation.session.header"]') ?? header
+    const parent = seat.parentElement
+    if (parent === null) return
+    if (topbar.parentElement !== standalone) standalone.append(topbar)
+    if (standalone.parentElement === parent) return
+    parent.insertBefore(standalone, seat.nextSibling)
+  }
 
   /** 还原所有搬移、工具条离场（桌面 / 卸载）。 */
   const detach = (): void => {
-    const modes = findModes()
+    // 还原当前输入行的 .modes；工具条里滞留的陈旧 .modes 一并清掉（随
+    // topbar 一起卸下前先 restore 当前的，避免其留在 DOM 空转）。
+    const modes = document.querySelector(MODES_SEL)
     if (modes !== null) restore(modes)
     const plan = document.querySelector('[data-slot="conversation.input.plan"]')
     if (plan !== null) restore(plan)
-    const model = document.querySelector('[data-slot="conversation.input.model"]')
+    const composer = document.querySelector('[data-composer-card]')
+    const model = composer?.querySelector('[data-slot="conversation.input.model"]') ?? null
     if (model !== null) restore(model)
     for (const key of WRAP_KEYS) {
       const wrap = document.querySelector(`[data-slot="${key}"]`)
       if (wrap !== null) restore(wrap)
     }
+    // standalone 会连带移除其子级 topbar；topbar.remove() 兜底（已剥离则为 no-op）。
+    standalone.remove()
     topbar.remove()
   }
 
-  /** 搬移（窄屏）：工具条进标题行右端，权限/模型上移，头部条目收进面板。 */
+  /**
+   * 搬移（窄屏，≤1023px）。
+   * 锚点两级：有框架 titleRow（会话已有消息）→ 工具条进标题行右端；titleRow 缺失
+   * （空会话，框架完全没渲染 titleRow）→ 工具条进插件自有的 standalone 顶部行。
+   * 权限/模型上移，头部条目收进 + 面板。跨锚点迁移只由本次 sync 的单一锚点驱动，
+   * move() 显式校验父子关系，不重复搬移。
+   */
   const attach = (): void => {
     const header = document.querySelector(HEADER_SEL)
     const composer = document.querySelector('[data-composer-card]')
     const tools = composer?.querySelector(TOOLS_SEL) ?? null
     if (header === null || tools === null) return
     const titleRow = header.querySelector(':scope > div:first-child')
-    if (titleRow === null) return
-    if (topbar.parentElement !== titleRow) titleRow.appendChild(topbar)
-    // 权限选择所在的 .modes → 工具条（+ 之前）。
-    const modes = findModes()
-    if (modes !== null) move(modes, topbar, more)
+    if (titleRow !== null) {
+      // 有标题行：卸下 standalone，工具条进 titleRow 右端。
+      standalone.remove()
+      if (topbar.parentElement !== titleRow) titleRow.appendChild(topbar)
+    } else {
+      // 空会话：工具条进 standalone 顶部行。
+      ensureStandalone(header)
+    }
+    // 权限选择所在的 .modes → 工具条（+ 之前）；并清掉切会话后滞留在
+    // 工具条里的旧 .modes（同型即认定为陈旧，去重）。modes 的驱逐谓词只认
+    // .modes 型（DIV 且无 data-slot/无弹出面板标记），不误伤模型座位锚点。
+    const modes = document.querySelector(MODES_SEL)
+    moveSingle(modes, topbar, more, child =>
+      child instanceof HTMLElement
+      && child.tagName === 'DIV'
+      && !child.hasAttribute('data-slot')
+      && !child.hasAttribute('data-dshm-topbar-pop'))
     // plan 座位放回输入行末尾（plan chip 留在底部，且不插在附件前）。
     const plan = document.querySelector('[data-slot="conversation.input.plan"]')
     if (plan !== null) move(plan, tools)
-    // 模型选择座位 → 工具条（+ 之前）。
-    const model = document.querySelector('[data-slot="conversation.input.model"]')
-    if (model !== null) move(model, topbar, more)
+    // 模型选择座位 → 工具条（+ 之前）；同样去重工具条里滞留的旧模型座位。
+    // 用 composer 卡片内查询作为"当前会话"的模型座位来源，避免 document 级
+    // querySelector 命中已被搬进工具条的旧实例（搬移后 composer 内不再有，
+    // 切会话时 React 会在 composer 内重建新的 —— 那才是要搬的）。
+    const model = composer?.querySelector('[data-slot="conversation.input.model"]') ?? null
+    moveSingle(model, topbar, more, child =>
+      child.hasAttribute('data-slot')
+      && child.getAttribute('data-slot') === 'conversation.input.model')
     // 头部右侧槽位锚点（标准模式/sessionlog/… 的容器）→ + 弹出面板。
     for (const key of WRAP_KEYS) {
       const wrap = document.querySelector(`[data-slot="${key}"]`)
