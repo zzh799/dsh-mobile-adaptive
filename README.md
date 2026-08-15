@@ -27,7 +27,7 @@ build.mjs          esbuild 构建（closure-factory 工件），--watch 热更
 
 ## 挂载
 
-1. `~/.dsh/profiles/web/package.json` 的 dependencies 加 `"dsh-mobile": "link:/Users/zhouzihang/Projects/Ai/dsh-mobile"`，并 `pnpm install`。
+1. `~/.dsh/profiles/web/package.json` 的 dependencies 加 `"dsh-mobile": "^0.1.0"`，并 `pnpm install`。（本地开发时可用 `"dsh-mobile": "link:本机仓库路径"` 代替。）
 2. `~/.dsh/profiles/web/cordis.patch.yml` 追加：
    ```yaml
    - insert:
@@ -39,7 +39,7 @@ build.mjs          esbuild 构建（closure-factory 工件），--watch 热更
 ## 日常使用
 
 ```sh
-cd ~/Projects/Ai/dsh-mobile
+cd <本机仓库路径>
 node build.mjs          # 一次性构建
 node build.mjs --watch  # 开发：浏览器半边热更
 ```
