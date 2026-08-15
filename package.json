@@ -1,0 +1,32 @@
+{
+  "name": "dsh-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "dsh web 移动端适配插件：侧边栏抽屉 + 设置页单列布局（P1）；宿主目录浏览移动端化 + 本地上传到工作区 ./上传/（P2）。",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "prepack": "npm run build"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ]
+    }
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

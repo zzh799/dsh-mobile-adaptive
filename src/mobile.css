@@ -1,0 +1,728 @@
+/* dsh-mobile 移动端适配样式（P1 侧边栏抽屉 + 设置页布局，P2 对话框/上传移动端化）
+ *
+ * 选择器纪律：全部锚定在稳定 data 属性 / 语义元素上（data-slot、
+ * data-sidebar-collapsed、data-composer-card、role=dialog、nav 等），
+ * 绝不依赖 dsh 的哈希类名；≥1024px（桌面）一条规则都不生效，桌面零回归。
+ *
+ * 断点（PRD 2）：≤1023px = 手机 + 平板；≤767px = 手机。
+ *
+ * 抽屉机制（P1 3.1）：不做任何 React 重写 —— AppFrame 在 <1024px 本来就
+ * 自动折叠侧栏（rail），窄屏手动展开走 narrowExpanded 覆盖位（布局 store
+ * 的 toggleSidebar）。本表只做两件事：① 把侧栏/详情轨道强制为 0，让中心
+ * 列占满全宽；② 把侧栏槽位包装器（inline display:contents）改造成 fixed
+ * 抽屉，随框架自身的 data-sidebar-collapsed 属性滑入滑出。遮罩、汉堡按钮、
+ * "点菜单项/遮罩关闭" 的交互由 client.tsx 的 shell.overlay 组件负责 ——
+ * CSS 只表达状态（开 = 框架属性消失），交互状态永不与框架脱节。
+ */
+
+/* ── 1. 框架：≤1023px 侧栏轨道归零，中心列全宽 ─────────────────────── */
+@media (max-width: 1023px) {
+  /* AppFrame 的行内 grid-template-columns 是 3 轨（侧栏/中心/详情）；侧栏
+     轨必须归零（抽屉是 fixed 定位，脱离网格），详情轨一并归零 —— 详情列在
+     窄屏本来就是桌面专属控件（窄屏下框架的让步链已自动关闭它），保留只会
+     挤压中心列。 */
+  [data-slot="root"] > div {
+    grid-template-columns: 0 minmax(0, 1fr) 0 !important;
+  }
+
+  /* 两侧拖拽手柄（侧栏 8px 热区、详情 12×32 药丸）在窄屏无意义且会挡住
+     抽屉边缘/内容，隐藏。 */
+  [data-shell-overlay] ~ [data-side='sidebar'],
+  [data-shell-overlay] ~ [data-side='details'] {
+    display: none !important;
+  }
+
+  /* 会话头左侧给浮动的汉堡按钮让位（标题/面包屑整体右移 64px，
+     与按钮右缘留 8px 呼吸空间）。 */
+  [data-slot="conversation.session.header"] > header {
+    padding-left: 64px;
+  }
+}
+
+/* ── 2. 抽屉本体（≤1023px）───────────────────────────────────────── */
+@media (max-width: 1023px) {
+  /* 侧栏槽位包装器：inline display:contents 被覆盖为 fixed 抽屉。关闭态
+     停在视口外（left:-280px），打开态由框架属性驱动滑入。
+     刻意用 left 而不是 transform 做位移：transform 会让自己成为所有
+     fixed 后代的包含块 —— ui-settings 的全屏面板就是侧栏的 fixed 后代
+     （挂在 sidebar.settings 槽里），用 transform 会把设置弹层困在抽屉
+     里并随抽屉一起滑走。 */
+  [data-slot="sidebar"] {
+    display: block !important;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: -280px;
+    width: 280px;
+    z-index: 40;
+    box-sizing: border-box;
+    /* 与框架自己的轨道过渡同一条曲线，视觉同源。 */
+    transition: left var(--ds-transition-duration-slow, 220ms) var(--ds-ease-in-out, ease);
+    border-right: 1px solid var(--dsw-alias-border-l1);
+  }
+
+  /* 打开：框架的窄屏手动展开（narrowExpanded）会让 data-sidebar-collapsed
+     消失 —— 这正是抽屉开合的唯一状态源。 */
+  [data-slot="root"] > div:not([data-sidebar-collapsed]) [data-slot="sidebar"] {
+    left: 0;
+    box-shadow: var(--dsw-shadow-lv3, 0 12px 32px rgba(0, 0, 0, 0.24));
+  }
+
+  /* 遮罩：半透明黑即可（不要模糊）。产品弹层用 --dsw-alias-bg-mask-1
+     （0.24）搭配 blur；单独用偏淡，故取 mask-3（0.48，两主题同值），
+     比写死 rgba 更贴主题体系。必须 position:absolute 且 left:100% 跟随
+     抽屉：fixed 的包含块是视口，不会随抽屉的 left 动画移动 —— 动画中
+     抽屉未到位时，遮罩会固定在 280px 处，中间露出内容区（展开动画期间
+     左侧白、右侧黑只有一半的 bug 就是它）。absolute 的包含块是 fixed
+     的抽屉包装器，left:100% 永远从抽屉右缘开始，动画全程贴合。 */
+  [data-slot="root"] > div:not([data-sidebar-collapsed]) [data-slot="sidebar"]::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 100%;
+    width: 100vw;
+    z-index: -1;
+    background: var(--dsw-alias-bg-mask-3, rgba(0, 0, 0, 0.48));
+  }
+
+  /* 抽屉里侧栏自带的"收起侧边栏"开关按钮（wide 态 logo 行第二个按钮）：
+     窄屏下它是冗余控件（关闭靠遮罩/汉堡/Escape），且"点菜单项关抽屉"的
+     捕获监听会与它自身的 toggle 双重翻转 —— 直接隐藏最干净。 */
+  [data-slot="sidebar"] > div > div:first-child > button:nth-child(2) {
+    display: none !important;
+  }
+
+  /* 抽屉内菜单项触控目标 ≥44px（工作区/会话行、新建会话、设置入口）。 */
+  [data-slot="sidebar"] button {
+    min-height: 44px;
+  }
+}
+
+/* ── 3. 汉堡按钮（组件渲染进 shell.overlay）──────────────────────── */
+/* 桌面端（≥1024px）不可见，任何窄屏规则都不触碰桌面。 */
+[data-dshm-hamburger] {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  [data-dshm-hamburger] {
+    display: grid;
+    place-items: center;
+    position: fixed;
+    /* iOS 安全区（刘海）下移；非刘海设备 env() 回退为 0。 */
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: 12px;
+    /* 高于抽屉本体（40）与遮罩，低于设置弹层（1000）：抽屉打开后汉堡
+       仍在遮罩之上，可点它直接收起（移动端抽屉惯例）。 */
+    z-index: 60;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: var(--dsw-specific-selector, #f0f2f5);
+    color: var(--dsw-alias-label-primary, #1a1a1a);
+    cursor: pointer;
+    /* overlayLayer 是 pointer-events:none 层，按钮必须重新吃进事件。 */
+    pointer-events: auto;
+  }
+  [data-dshm-hamburger]:hover {
+    /* 与产品工具圆钮（+ 按钮）同款 hover 反馈。 */
+    background: var(--dsw-alias-interactive-bg-hover-solid, #e3e6ea);
+  }
+}
+
+/* ── 4. 设置页（P1 3.2）：全屏 + 两层导航 ──────────────────────────
+ * 移动端把设置改成 iOS 风格两层：第一层（默认态）是全屏分区列表（通用
+ * 设置 / 模型 / 插件 / Agent 预设，行高 ≥52px 带右侧箭头），点击分区
+ * 后进入第二层（具体设置项，左上角返回按钮）。层的切换由 client.tsx
+ * 的 SettingsDrilldown 控制 —— 在面板元素上写 data-dshm-settings-level
+ * 属性，CSS 只表达两个静态状态；面板每次重新打开都是新元素，天然回到
+ * 第一层。桌面端（≥1024px）这些规则全部不生效，仍是一栏导航 + 内容。 */
+@media (max-width: 1023px) {
+  /* 设置面板（settings 的 Modal 用 aria-labelledby 标题目，原始 Modal 用
+     aria-label —— 以此区分，避免误伤其他弹层）。窄屏改全屏。 */
+  [role="dialog"][aria-labelledby] {
+    width: 100vw !important;
+    max-width: none !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+    flex-direction: column !important;
+  }
+
+  /* 第一层（默认态）：导航竖条变成全屏分区列表，内容区隐藏。 */
+  [role="dialog"][aria-labelledby] nav {
+    flex: 1 !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 4px !important;
+    padding: 16px !important;
+    box-sizing: border-box;
+    overflow-y: auto;
+  }
+  [role="dialog"][aria-labelledby] nav > div:last-child {
+    flex-direction: column !important;
+  }
+  /* 分区行只作用于列表容器（nav > div:last-child），不再触碰标题行里
+     注入的关闭按钮（后者因此无需再叠 !important 反制行规则）。几何对齐
+     产品 navCell（r12、gap 8、字号 14），触控高度按 PRD 抬到 52px。 */
+  [role="dialog"][aria-labelledby] nav > div:last-child > button {
+    width: 100%;
+    min-height: 52px;
+    padding: 0 14px;
+    border-radius: 12px;
+    justify-content: flex-start;
+    gap: 8px;
+    font-size: 14px;
+  }
+  [role="dialog"][aria-labelledby] nav > div:last-child > button:hover {
+    background: var(--dsw-specific-sidebar-nav-item-hover, rgba(0, 0, 0, 0.05));
+  }
+  [role="dialog"][aria-labelledby] nav > div:last-child > button:active {
+    background: var(--dsw-specific-sidebar-nav-item-active, rgba(0, 0, 0, 0.08));
+  }
+  /* 右侧箭头：产品 chevron-right 图标（IconChevronRightOutline14 路径），
+     用 mask 渲染成 currentColor 着色，避免文本字形随字体漂移。 */
+  [role="dialog"][aria-labelledby] nav > div:last-child > button::after {
+    content: '';
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin-left: 4px;
+    background: var(--dsw-alias-label-tertiary, #81858c);
+    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'><path d='M5.5 2.15137L5.92383 2.57617L8.65137 5.30273C8.90706 5.55843 9.13382 5.78438 9.29785 5.98828C9.46883 6.20088 9.61756 6.44405 9.66602 6.75C9.69222 6.91565 9.69222 7.08435 9.66602 7.25C9.61756 7.55595 9.46883 7.79912 9.29785 8.01172C9.13382 8.21561 8.90706 8.44157 8.65137 8.69727L5.92383 11.4238L5.5 11.8486L4.65137 11L5.07617 10.5762L7.80273 7.84863C8.07732 7.57405 8.24849 7.40124 8.3623 7.25977C8.46904 7.12709 8.47813 7.07728 8.48047 7.0625C8.48703 7.02105 8.48703 6.97895 8.48047 6.9375C8.47813 6.92272 8.46904 6.87291 8.3623 6.74023C8.24848 6.59876 8.07732 6.42595 7.80273 6.15137L5.07617 3.42383L4.65137 3L5.5 2.15137Z' fill='black'/></svg>") center / contain no-repeat;
+    mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'><path d='M5.5 2.15137L5.92383 2.57617L8.65137 5.30273C8.90706 5.55843 9.13382 5.78438 9.29785 5.98828C9.46883 6.20088 9.61756 6.44405 9.66602 6.75C9.69222 6.91565 9.69222 7.08435 9.66602 7.25C9.61756 7.55595 9.46883 7.79912 9.29785 8.01172C9.13382 8.21561 8.90706 8.44157 8.65137 8.69727L5.92383 11.4238L5.5 11.8486L4.65137 11L5.07617 10.5762L7.80273 7.84863C8.07732 7.57405 8.24849 7.40124 8.3623 7.25977C8.46904 7.12709 8.47813 7.07728 8.48047 7.0625C8.48703 7.02105 8.48703 6.97895 8.48047 6.9375C8.47813 6.92272 8.46904 6.87291 8.3623 6.74023C8.24848 6.59876 8.07732 6.42595 7.80273 6.15137L5.07617 3.42383L4.65137 3L5.5 2.15137Z' fill='black'/></svg>") center / contain no-repeat;
+  }
+  /* 列表层标题行（navTitle“设置”）：标题在左，右上角是注入的关闭按钮
+     （content 的 header 在第一层被隐藏，真实 × 不可见，见 client.tsx）。
+     字号对齐产品 navTitle（16/500）。 */
+  [role="dialog"][aria-labelledby] nav > div:first-child {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 4px 12px 12px;
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 500;
+  }
+  /* 关闭按钮：44×44 触控目标，视觉按产品弹层关闭钮（透明圆底、14px
+     图标 IconCloseOutline16）。行规则已收窄到列表容器，无需 !important。 */
+  .dshm-settings-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    cursor: pointer;
+    color: var(--dsw-alias-label-primary, #1a1a1a);
+  }
+  .dshm-settings-close:hover {
+    background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.06));
+  }
+  [role="dialog"][aria-labelledby] > div:last-child {
+    display: none !important;
+  }
+
+  /* 第二层：点击分区后 —— 导航隐藏，内容区（具体设置项）全屏。 */
+  [role="dialog"][aria-labelledby][data-dshm-settings-level="content"] nav {
+    display: none !important;
+  }
+  [role="dialog"][aria-labelledby][data-dshm-settings-level="content"] > div:last-child {
+    display: flex !important;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* 返回按钮（JS 注入到内容区 header 最左）：左上角返回第一层。
+     chevron-left 图标（IconChevronLeftOutline14 路径）+ 分区名，圆角
+     对齐产品小按钮（r8）。 */
+  .dshm-settings-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    min-height: 44px;
+    min-width: 0;
+    max-width: 45%;
+    padding: 0 10px 0 4px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--dsw-alias-label-secondary, #5a5e66);
+  }
+  .dshm-settings-back > svg {
+    flex: none;
+  }
+  .dshm-settings-back-label {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .dshm-settings-back:hover {
+    background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.06));
+  }
+
+  /* 通用设置项：label 在上、控件在下、拉满宽度（PRD 3.2）。行根节点
+     统一改纵向；直接子级（文案块/控件块）拉满。 */
+  [data-slot="settings.general.item"] > * {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  [data-slot="settings.general.item"] > * > * {
+    flex: none !important;
+    width: 100% !important;
+  }
+  /* 控件（下拉/按钮/输入）触控目标 ≥44px；外观三色块在行内容器里仍
+     均分整行（flex 收缩），不会竖排。 */
+  [data-slot="settings.general.item"] button,
+  [data-slot="settings.general.item"] select,
+  [data-slot="settings.general.item"] input {
+    width: 100% !important;
+    min-height: 44px;
+  }
+}
+
+/* 桌面端（≥1024px）隐藏注入的返回/关闭按钮 —— drilldown JS 在桌面也运行
+   （无害），但注入的按钮不能出现在原版设置面板里。 */
+@media (min-width: 1024px) {
+  .dshm-settings-back,
+  .dshm-settings-close {
+    display: none !important;
+  }
+}
+
+/* 手机档（≤767px）：设置面板内按钮统一 44px 触控；输入类字号抬到 16px
+   防止 iOS 聚焦自动缩放；模型/插件分区的控件同样加高。 */
+@media (max-width: 767px) {
+  [role="dialog"][aria-labelledby] button {
+    min-height: 44px;
+  }
+  [data-slot="settings.section"] input,
+  [data-slot="settings.section"] select,
+  [data-slot="settings.section"] textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}
+
+/* ── 5. 目录浏览对话框（P2 3.3 移动端化）────────────────────────── */
+@media (max-width: 1023px) {
+  /* 原始 Modal（aria-label 标注）窄屏改全屏：目录浏览、新建文件夹等
+     弹层在手机上都不该是悬浮卡片。flex:none 防止 Modal 根（带 24px 内
+     边距的居中 flex 容器）把卡片收缩回去。 */
+  [role="dialog"][aria-label] {
+    width: 100vw !important;
+    flex: none !important;
+    max-width: none !important;
+    /* 100vh 先行作为旧版 iOS 的回退（dvh 支持 iOS 15.4+，后者覆盖）。 */
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Miller 双栏在手机宽放不下：隐藏父级栏，只留当前层（:has 命中"后面
+     还有一栏"的父栏）。交互变为"点行进子目录、面包屑返回上级"，与
+     PRD 3.3 的交互描述一致；选中态由 Open 按钮承接（选中的目录正是
+     当前可见层）。 */
+  [role="dialog"] [role="list"] {
+    min-width: 0 !important;
+  }
+  [role="dialog"] [role="list"]:first-child:has(~ [role="list"]) {
+    display: none;
+  }
+  /* 目录行触控目标 ≥44px，字号略升。 */
+  [role="dialog"] [role="listitem"] > button {
+    min-height: 44px;
+    font-size: 15px;
+  }
+  /* 面包屑条与路径编辑输入加高到可点高度。 */
+  [role="dialog"] [role="navigation"] {
+    min-height: 44px;
+  }
+  [role="dialog"] input {
+    font-size: 16px;
+  }
+}
+
+/* ── 6. 聊天输入区（P2 3.4 附件按钮载体）────────────────────────── */
+@media (max-width: 767px) {
+  /* 输入卡内按钮抬到 44px 触控目标。注意：min-height 必须与 min-width
+     成对 —— 只撑高度会把 34x34 的圆形发送/加号按钮撑成竖椭圆（762px
+     附近变椭圆的 bug）。胶囊按钮（权限/plan chip）只加高不变形。 */
+  [data-composer-card] button {
+    min-height: 44px;
+  }
+  /* 圆形按钮（tools 行第一个 = 加号；trailing 行直接子按钮 = 发送/停止）
+     同时撑宽，保持正圆。 */
+  [data-composer-card] > div:last-child > div:first-child > button:first-child,
+  [data-composer-card] > div:last-child > div:last-child > button {
+    min-width: 44px;
+  }
+  /* ContextMeter 是桌面态占用指示器，手机工具栏放不下，隐藏。 */
+  [data-composer-card] button[aria-haspopup="dialog"] {
+    display: none;
+  }
+  [data-composer-card] select {
+    min-height: 36px;
+  }
+}
+
+/* 附件按钮紧随 + 命令按钮（所有宽度，含桌面）：tools 行 DOM 顺序是
+   [+ 命令][access/plan][附件]，附件被权限/plan 胶囊隔开。flex order 把
+   modes 组（tools 行内唯一无 data-slot 的直接 div 子级；input.left 槽位
+   包装器带 data-slot 且 display:contents，不产生 flex item）抬到 2，
+   附件按钮（默认 order 0）即插到命令按钮与 modes 之间。≤1023px 时
+   .modes 整体搬进顶部工具条（§8），本规则在输入行内不再命中、无副作用。
+   Tab 焦点序仍按 DOM（胶囊在前），移动端无键盘场景不受影响。 */
+[data-composer-card] > div:last-child > div:first-child > div:not([data-slot]) {
+  order: 2;
+}
+
+/* ── 7. 上传面板（P2 3.4 进度展示，组件自身样式）──────────────────
+ * 面板与产品 composer dock 卡家族（TodoPanel/GoalBar/QueueDock）同构：
+ * tip 表面 + border-l1 + r12 + 共享 dock 内缩几何（宽度 = 栈列 − 2×
+ * 侧 clearance − 4×dock inset，上限 = 输入卡宽 − 4×inset），与 GoalBar
+ * /Queue 同屏时边缘完全对齐。 */
+.dshm-upload-panel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  /* 与 TodoPanel/GoalBar 同一条 dock 宽度公式（重复减法，兼容旧 Safari
+     的 calc；两处 var 缺省值兜底插件独立运行场景）。 */
+  width: calc(
+    100% -
+    var(--dsh-composer-side-clearance, 16px) -
+    var(--dsh-composer-side-clearance, 16px) -
+    var(--dsh-composer-dock-inset, 8px) -
+    var(--dsh-composer-dock-inset, 8px) -
+    var(--dsh-composer-dock-inset, 8px) -
+    var(--dsh-composer-dock-inset, 8px)
+  );
+  max-width: calc(
+    var(--dsh-composer-card-max-width, 780px) -
+    var(--dsh-composer-dock-inset, 8px) -
+    var(--dsh-composer-dock-inset, 8px) -
+    var(--dsh-composer-dock-inset, 8px) -
+    var(--dsh-composer-dock-inset, 8px)
+  );
+  margin: 0 auto;
+  padding: 6px 12px;
+  border: 1px solid var(--dsw-alias-border-l1, #e3e6ea);
+  border-radius: 12px;
+  background: var(--dsw-specific-tip, #f0f2f5);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+/* 头部：与 Todo 卡头同构 —— 14px 引导图标 + 13/500 标题 + 右侧计数。 */
+.dshm-upload-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+}
+
+.dshm-upload-lead {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--dsw-alias-label-tertiary, #81858c);
+}
+
+.dshm-upload-head-title {
+  flex: none;
+  font-size: 13px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+}
+
+.dshm-upload-head-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary, #81858c);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dshm-upload-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* 行：与 Queue 行同高（36px）、gap 10。 */
+.dshm-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  min-width: 0;
+}
+
+/* 行首状态字形：16×16 格、14px 图标，同 Todo 行；上传中旋转（产品
+   loading 图标），成功/失败着状态色。 */
+.dshm-upload-glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+
+.dshm-upload-glyph-uploading {
+  color: var(--dsw-alias-state-business-primary, #4276e6);
+  animation: dshm-upload-spin 1s linear infinite;
+}
+
+.dshm-upload-glyph-done {
+  color: var(--dsw-alias-state-success-primary, #2e7d4f);
+}
+
+.dshm-upload-glyph-error {
+  color: var(--dsw-alias-state-error-primary, #c5483a);
+}
+
+@keyframes dshm-upload-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dshm-upload-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary-dimmed, #151517);
+}
+
+.dshm-upload-meta {
+  flex: none;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary, #81858c);
+  /* 数字等宽，进度跳动不抖动。 */
+  font-variant-numeric: tabular-nums;
+}
+
+/* 操作：产品 dock 行同款 28×28 圆形图标钮；手机档抬到 44px 触控。 */
+.dshm-upload-action {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--dsw-alias-label-tertiary, #81858c);
+}
+
+.dshm-upload-action:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.06));
+  color: var(--dsw-alias-label-secondary, #5a5e66);
+}
+
+.dshm-upload-action:focus-visible {
+  outline: 2px solid var(--dsw-alias-label-tertiary, #81858c);
+  outline-offset: -2px;
+}
+
+.dshm-upload-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dshm-upload-track {
+  height: 4px;
+  margin-left: 26px;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.06));
+  overflow: hidden;
+}
+
+.dshm-upload-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--dsw-alias-button-info-fill, #3964fe);
+  transition: width 120ms ease;
+}
+
+/* 状态细节行：与行首字形同列对齐（16 格 + 10 gap）；成功信息用
+   次级色（成功语义由字形承担），错误仍用错误色。 */
+.dshm-upload-done,
+.dshm-upload-error {
+  margin-left: 26px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.dshm-upload-done {
+  color: var(--dsw-alias-label-tertiary, #81858c);
+}
+
+.dshm-upload-error {
+  color: var(--dsw-alias-state-error-primary, #c5483a);
+}
+
+/* 附件按钮（输入卡工具行左侧）：几何对齐同行 + 按钮（28×28、14px
+   图标），手机档抬到 44px 触控。 */
+.dshm-attach {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--dsw-specific-selector, #f0f2f5);
+  color: var(--dsw-alias-label-primary, #1a1a1a);
+  cursor: pointer;
+}
+
+.dshm-attach:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-solid, #e3e6ea);
+}
+
+.dshm-attach:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 767px) {
+  .dshm-attach {
+    width: 44px;
+    height: 44px;
+  }
+  .dshm-upload-action {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* ── 8. 顶部工具条（≤1023px 手机+平板）──────────────────────────────
+ * 底部输入栏的权限选择/模型选择上移到会话头部右侧（替代原 标准模式/
+ * sessionlog 的位置）；原头部右侧条目（标准模式标签、sessionlog 导出、
+ * jobs/subagent 等）由 client.tsx 整体搬进 + 号弹出面板（槽位锚点
+ * display:contents，条目在面板里自然流动）。桌面端（≥1024px）工具条
+ * 不注入（JS 兜底 display:none），一切还原。 */
+@media (min-width: 1024px) {
+  .dshm-topbar {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  .dshm-topbar {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin-left: 16px;
+    /* 弹出面板的定位锚。 */
+    position: relative;
+  }
+  /* + 号按钮：与输入行工具圆钮同款（selector fill、28px、无阴影）。 */
+  .dshm-topbar-more {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: var(--dsw-specific-selector, #f0f2f5);
+    color: var(--dsw-alias-label-primary, #1a1a1a);
+    cursor: pointer;
+  }
+  .dshm-topbar-more:hover {
+    background: var(--dsw-alias-interactive-bg-hover-solid, #e3e6ea);
+  }
+  /* 弹出面板：tip 表面 + border-l1 + r12 + lv3 阴影（产品弹层家族）。 */
+  .dshm-topbar-pop {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    min-width: 176px;
+    box-sizing: border-box;
+    padding: 8px;
+    border: 1px solid var(--dsw-alias-border-l1, #e3e6ea);
+    border-radius: 12px;
+    background: var(--dsw-specific-tip, #f0f2f5);
+    box-shadow: var(--dsw-shadow-lv3, 0 12px 32px rgba(0, 0, 0, 0.24));
+  }
+  .dshm-topbar-pop[hidden] {
+    display: none;
+  }
+  /* 权限选择在移动宽度（≤1023px）下激进折叠为图标：不再做空间精细检测。
+     仅带模式图标的 chip 折叠（无图标的自定义模式保留文字，与产品规则同
+     逻辑）；选择器特异性高于产品 @container 规则，覆盖其视口评估，保证
+     平板/手机一致为图标形态。 */
+  .dshm-topbar span:has(> button[aria-label^="访问模式"]) > button:has(> span:first-child svg) > span:nth-child(2) {
+    display: none;
+  }
+  /* 权限/模型选择上移后，菜单改为向下展开（原 side=top / bottom 定位是
+     给底部输入栏设计的，移到顶部后向上会顶到标题/屏幕外）。精准锚定两
+     个 chip 的菜单：权限菜单是 Menu 根 span 的直接子级，模型菜单在
+     model 槽位锚点内；不误伤弹出面板里的条目菜单与子菜单。 */
+  .dshm-topbar span:has(> button[aria-label^="访问模式"]) > [role="menu"],
+  .dshm-topbar [data-slot="conversation.input.model"] [role="menu"] {
+    top: calc(100% + 4px);
+    bottom: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  /* 搬进工具条的按钮已脱离 [data-composer-card]，44px 触控规则在此补上。 */
+  .dshm-topbar button {
+    min-height: 44px;
+  }
+  .dshm-topbar-more {
+    min-width: 44px;
+  }
+  /* 面板条目（标准模式标签 / sessionlog 按钮等）撑高为触控行：条目是
+     槽位锚点（内联 display:contents，覆盖不了）的子级，选择器落在条目上。 */
+  .dshm-topbar-pop [data-slot] > * {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
