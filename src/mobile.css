@@ -1,4 +1,4 @@
-/* dsh-mobile 移动端适配样式（P1 侧边栏抽屉 + 设置页布局，P2 对话框/上传移动端化）
+/* dsh-mobile-adaptive 移动端适配样式（P1 侧边栏抽屉 + 设置页布局，P2 对话框/上传移动端化）
  *
  * 选择器纪律：全部锚定在稳定 data 属性 / 语义元素上（data-slot、
  * data-sidebar-collapsed、data-composer-card、role=dialog、nav 等），

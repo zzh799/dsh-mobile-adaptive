@@ -1,4 +1,4 @@
-# dsh-mobile
+# dsh-mobile-adaptive
 
 dsh web 的移动端适配插件。以 dsh 客户端插件形式挂载，**纯 CSS/JS 注入，不改 dsh 业务逻辑**；桌面（`>=1024px`）零改动。
 
@@ -20,19 +20,19 @@ dsh web 的移动端适配插件。以 dsh 客户端插件形式挂载，**纯 C
 ```
 src/client.tsx     浏览器半边：抽屉交互、上传按钮 + 进度面板、store
 src/mobile.css     全部移动端结构样式（锚定 data-slot / 属性选择器）
-src/index.ts       宿主半边：挂载 /dsh-mobile 上传通道
+src/index.ts       宿主半边：挂载 /dsh-mobile-adaptive 上传通道
 src/upload-host.ts 上传后端：分片落盘、改名、护栏、清扫
 build.mjs          esbuild 构建（closure-factory 工件），--watch 热更
 ```
 
 ## 挂载
 
-1. `~/.dsh/profiles/web/package.json` 的 dependencies 加 `"dsh-mobile": "^0.1.0"`，并 `pnpm install`。（本地开发时可用 `"dsh-mobile": "link:本机仓库路径"` 代替。）
+1. `~/.dsh/profiles/web/package.json` 的 dependencies 加 `"dsh-mobile-adaptive": "^0.1.0"`，并 `pnpm install`。（本地开发时可用 `"dsh-mobile-adaptive": "link:本机仓库路径"` 代替。）
 2. `~/.dsh/profiles/web/cordis.patch.yml` 追加：
    ```yaml
    - insert:
-       - id: dsh-mobile
-         name: 'dsh-mobile'
+       - id: dsh-mobile-adaptive
+         name: 'dsh-mobile-adaptive'
    ```
 3. 重启 `pnpm dsh web`（launchd 服务 `com.deepseek.dsh-web`，`launchctl kickstart -k gui/$(id -u)/com.deepseek.dsh-web`）。
 
@@ -72,7 +72,7 @@ node build.mjs --watch  # 开发：浏览器半边热更
 
 ## 上传传输设计
 
-- 客户端按 **1 MiB 切片 base64** 走通用 RPC 通道 `/dsh-mobile`（`upload/begin|append|commit|abort`），复用宿主连接传输层的信任围栏，不新增 HTTP 面。
+- 客户端按 **1 MiB 切片 base64** 走通用 RPC 通道 `/dsh-mobile-adaptive`（`upload/begin|append|commit|abort`），复用宿主连接传输层的信任围栏，不新增 HTTP 面。
 - 宿主只写 `<cwd>/上传/`：cwd 必须是**已存在的绝对路径目录**；文件名清洗为单路径段（剥分隔符/控制字符、240 字节截断），无法逃逸暂存目录。
 - 重名改名用 **no-clobber `link()`**（EEXIST 换 `(1) (2) …` 至 999），无 TOCTOU 窗口，并发同名不互相覆盖。
 - commit 校验 `received === expected`，不完整会话拒绝落盘；`.part` 临时文件 1 小时清扫、卸载时清除。

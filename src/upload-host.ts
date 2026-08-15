@@ -1,6 +1,6 @@
 /**
- * dsh-mobile upload backend (host half). Receives chunked uploads over the
- * plugin's generic RPC channel (`/dsh-mobile`) and lands each file in the
+ * dsh-mobile-adaptive upload backend (host half). Receives chunked uploads over the
+ * plugin's generic RPC channel (`/dsh-mobile-adaptive`) and lands each file in the
  * fixed staging directory `<session cwd>/上传/` (PRD 3.4: 固定暂存区，相对
  * 当前工作区，用户后续手动整理).
  *

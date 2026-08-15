@@ -1,5 +1,5 @@
 /**
- * dsh-mobile build: esbuild emits the two artifacts the loader contract
+ * dsh-mobile-adaptive build: esbuild emits the two artifacts the loader contract
  * expects, mirroring dsh-skin-daihaoyuan.
  *
  *  - lib/client.js — the browser bundle in the closure-factory format
@@ -17,7 +17,7 @@
  */
 import { context } from 'esbuild'
 
-const ID = 'dsh-mobile'
+const ID = 'dsh-mobile-adaptive'
 
 /** The loader module table (repo: packages/client/web/src/platform.ts) plus the documented runtime-store exemption. */
 const EXTERNALS = [
@@ -69,7 +69,7 @@ if (process.argv.includes('--watch')) {
   const nodes = await context(nodeConfig)
   await clients.watch()
   await nodes.watch()
-  console.log(`[dsh-mobile] watching src/ — lib/client.js hot-swaps into the running dsh web (${ID})`)
+  console.log(`[dsh-mobile-adaptive] watching src/ — lib/client.js hot-swaps into the running dsh web (${ID})`)
   await new Promise(() => {})
 } else {
   const clients = await context(clientConfig)
@@ -78,5 +78,5 @@ if (process.argv.includes('--watch')) {
   await nodes.rebuild()
   await clients.dispose()
   await nodes.dispose()
-  console.log(`[dsh-mobile] built lib/client.js and lib/index.js for ${ID}`)
+  console.log(`[dsh-mobile-adaptive] built lib/client.js and lib/index.js for ${ID}`)
 }

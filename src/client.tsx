@@ -1,5 +1,5 @@
 /**
- * dsh-mobile, browser half. Three registrations:
+ * dsh-mobile-adaptive, browser half. Three registrations:
  *
  *  - `shell.overlay` 的 MobileChrome：窄屏汉堡按钮 + 抽屉关闭交互（P1
  *    3.1）。抽屉的视觉层全部在 mobile.css（侧栏槽位改造成 fixed 抽屉，
@@ -10,7 +10,7 @@
  *  - `conversation.input.dock` 的 UploadPanel：上传进度面板（批量、
  *    逐文件进度、成功/失败态、重试/移除）。
  *
- * 上传传输：宿主侧的 `/dsh-mobile` 通用 RPC 通道（node 半身在
+ * 上传传输：宿主侧的 `/dsh-mobile-adaptive` 通用 RPC 通道（node 半身在
  * upload-host.ts），客户端按 1 MiB 切片 base64 传送 —— 走既有的连接
  * 传输层（自带信任围栏），每片到达即推进真实进度。
  */
@@ -26,7 +26,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import mobileCss from './mobile.css'
 
-export const name = 'dsh-mobile'
+export const name = 'dsh-mobile-adaptive'
 
 /** Required client services: slots (registrations), connection (upload RPC), layout (抽屉开关). */
 export const inject = ['slots', 'connection', 'layout'] as const
@@ -34,7 +34,7 @@ export const inject = ['slots', 'connection', 'layout'] as const
 // ── 上传引擎（客户端）───────────────────────────────────────────────
 
 /** 通用 RPC 通道名（与宿主管道的注册一致）。 */
-const CHANNEL = '/dsh-mobile'
+const CHANNEL = '/dsh-mobile-adaptive'
 /** 切片大小：1 MiB 二进制 → 约 1.37 MiB base64 每请求，局域网往返无感。 */
 const CHUNK_BYTES = 1024 * 1024
 /** 与宿主侧一致的逐文件上限（防御性重复声明，宿主才是权威）。 */
@@ -650,22 +650,22 @@ export function apply(ctx: ClientContext): void {
   styleTag.dataset.pluginCss = `${name}/mobile.css`
   styleTag.textContent = mobileCss as string
   document.head.appendChild(styleTag)
-  ctx.effect(() => () => { styleTag.remove() }, 'dsh-mobile: mobile css')
+  ctx.effect(() => () => { styleTag.remove() }, 'dsh-mobile-adaptive: mobile css')
 
   // 抽屉控制：shell.overlay（root 级，整帧浮动层）。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
-    id: 'dsh-mobile-chrome',
+    id: 'dsh-mobile-adaptive-chrome',
     order: 100,
     inject: () => ({ layout: ctx.layout }),
   }, MobileChrome))
 
   // 设置两层导航（纯 DOM 层，不占槽位）。
-  ctx.effect(() => setupSettingsDrilldown(), 'dsh-mobile: settings drilldown')
+  ctx.effect(() => setupSettingsDrilldown(), 'dsh-mobile-adaptive: settings drilldown')
 
   // 顶部工具条（纯 DOM 层，不占槽位）：权限/模型选择上移，标准模式/
   // sessionlog 收进 + 弹出面板。
-  ctx.effect(() => setupTopbar(), 'dsh-mobile: topbar')
+  ctx.effect(() => setupTopbar(), 'dsh-mobile-adaptive: topbar')
 
   // 上传：按钮 + 进度面板共享同一会话级 store。
   const store = createUploadStore()
@@ -673,14 +673,14 @@ export function apply(ctx: ClientContext): void {
     ctx.slots.inject('conversation.input.dock', function* () {
       yield ctx.slots.register({
         name: 'conversation.input.left',
-        id: 'dsh-mobile-upload-button',
+        id: 'dsh-mobile-adaptive-upload-button',
         order: 20,
         store,
         inject: () => ({ rpc: connection.rpc }),
       }, UploadButton)
       yield ctx.slots.register({
         name: 'conversation.input.dock',
-        id: 'dsh-mobile-upload-panel',
+        id: 'dsh-mobile-adaptive-upload-panel',
         order: 20,
         store,
         inject: () => ({}),

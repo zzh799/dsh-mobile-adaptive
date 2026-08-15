@@ -1,11 +1,11 @@
 {
-  "name": "dsh-mobile",
+  "name": "dsh-mobile-adaptive",
   "version": "0.1.0",
   "description": "dsh web 移动端适配插件：侧边栏抽屉 + 设置页单列布局（P1）；宿主目录浏览移动端化 + 本地上传到工作区 ./上传/（P2）。",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zzh799/dsh-mobile.git"
+    "url": "git+https://github.com/zzh799/dsh-mobile-adaptive.git"
   },
   "keywords": [
     "dsh",
@@ -14,7 +14,7 @@
     "deepseek-harness"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/zzh799/dsh-mobile#readme",
+  "homepage": "https://github.com/zzh799/dsh-mobile-adaptive#readme",
   "main": "./lib/index.js",
   "exports": {
     ".": "./lib/index.js",
