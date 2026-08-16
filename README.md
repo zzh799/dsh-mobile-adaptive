@@ -39,10 +39,10 @@ dsh plugin --profile web add dsh-mobile-adaptive
 dsh plugin --profile web add link:<本机仓库绝对路径>
 ```
 
-安装后重启 dsh web（launchd 服务 `com.deepseek.dsh-web`）：
+安装后重启 dsh web 使新插件生效（先停止已在运行的 `dsh web`，再重新启动）：
 
 ```sh
-launchctl kickstart -k gui/$(id -u)/com.deepseek.dsh-web
+dsh web
 ```
 
 > 从 git 安装（`dsh plugin --profile web add github:zzh799/dsh-mobile-adaptive`）时，`prepare` 脚本会在安装后构建 `lib/`；pnpm ≥10 默认拦截构建，需把 pnpm 提示的包键加入 profile 的 `pnpm-workspace.yaml` 的 `allowBuilds` 再重试。
