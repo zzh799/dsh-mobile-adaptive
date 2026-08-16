@@ -470,9 +470,16 @@ function setupTopbar(): () => void {
       child.hasAttribute('data-slot')
       && child.getAttribute('data-slot') === 'conversation.input.model')
     // 头部右侧槽位锚点（标准模式/sessionlog/… 的容器）→ + 弹出面板。
+    // 去重：pop 里同 slot 至多保留一个。切会话后旧锚点若滞留（孤儿），
+    // 用当前锚点替换；当前头部位已无该 slot（空会话不渲染 titleRow/这些
+    // 座位）则清掉 pop 里的滞留项，避免多次切换后"数量过多"。
     for (const key of WRAP_KEYS) {
-      const wrap = document.querySelector(`[data-slot="${key}"]`)
-      if (wrap !== null) move(wrap, pop)
+      const keySel = `[data-slot="${key}"]`
+      const current = document.querySelector(keySel)
+      const orphan = pop.querySelector(keySel)
+      if (current === null) { orphan?.remove(); continue }
+      if (orphan !== null && orphan !== current) orphan.remove()
+      move(current, pop)
     }
   }
 
