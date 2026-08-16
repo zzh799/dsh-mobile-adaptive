@@ -27,14 +27,25 @@ build.mjs          esbuild 构建（closure-factory 工件），--watch 热更
 
 ## 挂载
 
-1. `~/.dsh/profiles/web/package.json` 的 dependencies 加 `"dsh-mobile-adaptive": "^0.1.0"`，并 `pnpm install`。（本地开发时可用 `"dsh-mobile-adaptive": "link:本机仓库路径"` 代替。）
-2. `~/.dsh/profiles/web/cordis.patch.yml` 追加：
-   ```yaml
-   - insert:
-       - id: dsh-mobile-adaptive
-         name: 'dsh-mobile-adaptive'
-   ```
-3. 重启 `pnpm dsh web`（launchd 服务 `com.deepseek.dsh-web`，`launchctl kickstart -k gui/$(id -u)/com.deepseek.dsh-web`）。
+本包同时声明 **组合包**（`dsh.bundle`，见根目录 `cordis.patch.yml`）与 **客户端插件**（`dsh.client`）。用标准流程安装并自动激活宿主 + 浏览器两半边，无需手改 profile：
+
+```sh
+dsh plugin --profile web add dsh-mobile-adaptive
+```
+
+本地开发链接本机仓库（改动即生效）：
+
+```sh
+dsh plugin --profile web add link:<本机仓库绝对路径>
+```
+
+安装后重启 dsh web（launchd 服务 `com.deepseek.dsh-web`）：
+
+```sh
+launchctl kickstart -k gui/$(id -u)/com.deepseek.dsh-web
+```
+
+> 从 git 安装（`dsh plugin --profile web add github:zzh799/dsh-mobile-adaptive`）时，`prepare` 脚本会在安装后构建 `lib/`；pnpm ≥10 默认拦截构建，需把 pnpm 提示的包键加入 profile 的 `pnpm-workspace.yaml` 的 `allowBuilds` 再重试。
 
 ## 日常使用
 

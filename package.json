@@ -22,14 +22,19 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib"
+    "lib",
+    "cordis.patch.yml"
   ],
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
+    "prepare": "node build.mjs",
     "prepack": "npm run build"
   },
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "inject": [
