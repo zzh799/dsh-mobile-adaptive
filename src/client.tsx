@@ -354,6 +354,7 @@ function setupTopbar(): () => void {
 
   const HEADER_SEL = '[data-slot="conversation.session.header"] > header'
   const TOOLS_SEL = '[data-composer-card] > div:last-child > div:first-child'
+  const WRAP_SEL = '[data-composer-card] > div:last-child > div:last-child'
   const MODES_SEL = `${TOOLS_SEL} > div:not([data-slot])`
   const WRAP_KEYS = ['conversation.session.header.actions', 'conversation.session.header.utilities']
 
@@ -385,17 +386,39 @@ function setupTopbar(): () => void {
     parent.insertBefore(standalone, seat.nextSibling)
   }
 
+  /** 把节点插回容器指定下标处（无 origin 时的兜底参照），已在容器则不动。 */
+  const placeBack = (node: Element, container: Element | null, index: number): void => {
+    if (container === null || node.parentElement === container) return
+    const ref = index < container.children.length ? container.children[index] : null
+    if (ref === node) return
+    if (ref !== null) container.insertBefore(node, ref)
+    else container.appendChild(node)
+  }
+
+  /** 优先按 origins 原位还原；无 origin（切会话后的新节点）则兜底落到输入行正确位置。 */
+  const restoreOrPlace = (node: Element, container: Element | null, index: number): void => {
+    if (origins.has(node)) { restore(node); return }
+    placeBack(node, container, index)
+  }
+
   /** 还原所有搬移、工具条离场（桌面 / 卸载）。 */
   const detach = (): void => {
-    // 还原当前输入行的 .modes；工具条里滞留的陈旧 .modes 一并清掉（随
-    // topbar 一起卸下前先 restore 当前的，避免其留在 DOM 空转）。
-    const modes = document.querySelector(MODES_SEL)
-    if (modes !== null) restore(modes)
-    const plan = document.querySelector('[data-slot="conversation.input.plan"]')
-    if (plan !== null) restore(plan)
     const composer = document.querySelector('[data-composer-card]')
-    const model = composer?.querySelector('[data-slot="conversation.input.model"]') ?? null
-    if (model !== null) restore(model)
+    const tools = composer?.querySelector(TOOLS_SEL) ?? null
+    const trailing = composer?.querySelector(WRAP_SEL) ?? null
+    // 窄屏期间可能切过会话：顶栏里被搬进来的 .modes/模型座位已脱离输入行，
+    // 必须【从顶栏里找】它们并还原（不能只用输入行 querySelector，否则找不到、
+    // 顶栏一 remove 就把权限/模型删掉）。顺序：先还原 .modes 到 tools，再还原
+    // 其内部的 plan 座位，再还原模型座位到 trailing，最后还原头部槽位锚点。
+    const isModesLike = (c: Element): boolean =>
+      c instanceof HTMLElement && c.tagName === 'DIV'
+      && !c.getAttribute('data-slot') && !c.hasAttribute('data-dshm-topbar-pop')
+    const modes = [...topbar.children].find(isModesLike) ?? null
+    if (modes !== null) restoreOrPlace(modes, tools, 1)
+    const plan = document.querySelector('[data-slot="conversation.input.plan"]')
+    if (plan !== null && plan !== modes) restoreOrPlace(plan, modes, 0)
+    const model = [...topbar.children].find(c => c.getAttribute('data-slot') === 'conversation.input.model') ?? null
+    if (model !== null) restoreOrPlace(model, trailing, 0)
     for (const key of WRAP_KEYS) {
       const wrap = document.querySelector(`[data-slot="${key}"]`)
       if (wrap !== null) restore(wrap)
